@@ -40,12 +40,25 @@ class Cube(object):
     def get_objectId(self):
         return self.objectId
 
-class Sphere(object):
+# class Sphere(object):
+
+#     def __init__(self, dimensions):
+#         assert len(dimensions) == 1
+#         self.dimensions = dimensions
+#         self.objectId = p.createCollisionShape(p.GEOM_SPHERE,radius=dimensions)
+
+#     def get_objectId(self):
+#         return self.objectId
+
+#     def set_dimensions(self, dimensions):
+#         pass
+
+class Cylinder(object):
 
     def __init__(self, dimensions):
-        assert len(dimensions) == 1
+        assert len(dimensions) == 2
         self.dimensions = dimensions
-        self.objectId = p.createCollisionShape(p.GEOM_SPHERE,radius=dimensions)
+        self.objectId = p.createCollisionShape(p.GEOM_CYLINDER,radius=dimensions[0], height=dimensions[1])
 
     def get_objectId(self):
         return self.objectId
@@ -53,6 +66,18 @@ class Sphere(object):
     def set_dimensions(self, dimensions):
         pass
 
+class Prism(object):
+
+    def __init__(self, dimensions):
+        assert len(dimensions) == 3
+        self.dimensions = dimensions
+        self.objectId = p.createCollisionShape(p.GEOM_MESH,fileName="prism.obj", collisionFrameOrientation=p.getQuaternionFromEuler([math.pi / 2.0, 0, 0]) ,meshScale=dimensions)
+
+    def get_objectId(self):
+        return self.objectId
+
+    def set_dimensions(self, dimensions):
+        pass
 
 class Button():
 
@@ -68,7 +93,7 @@ class Button():
         link_Masses=[1]
         linkCollisionShapeIndices=[link1Id]
         linkVisualShapeIndices=[link1Id]
-        linkPositions=[[0,0,.17]]
+        linkPositions=[[0,0,.13]]
         linkOrientations=[[0,0,0,1]]
         linkInertialFramePositions=[[0,0,0]]
         linkInertialFrameOrientations=[[0,0,0,1]]
@@ -139,7 +164,7 @@ class TrajectoryComposer(object):
         
 
 
-class PrismaticController(object):
+class PrismaticRobot(object):
     def __init__(self, bodyId):
         self.endEffectorId = p.getNumJoints(bodyId) - 1
         self.bodyId = bodyId
@@ -168,7 +193,7 @@ class PrismaticController(object):
     
     def reset(self, resetJointPoses):
         for i in range (p.getNumJoints(self.bodyId)):
-            p.resetJointState(sphereId,i,resetJointPoses[i])
+            p.resetJointState(robotId,i,resetJointPoses[i])
         
         
     
@@ -184,7 +209,7 @@ def setUpWorld(initialSimSteps=100):
 
     Returns
     -------
-    sphereId : int
+    robotId : int
     endEffectorId : int 
     """
     p.resetSimulation()
@@ -196,17 +221,18 @@ def setUpWorld(initialSimSteps=100):
     sleep(0.1)
     p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,0)
     # Load Baxter
-    sphereId = p.loadURDF("prismatic_sphere.urdf", useFixedBase=True)
-    p.enableJointForceTorqueSensor(sphereId, 0, enableSensor=True)
+    robotId = p.loadURDF("prismatic_sphere.urdf", useFixedBase=True)
+    p.enableJointForceTorqueSensor(robotId, 0, enableSensor=True)
 
-    buttonId = Button(base_shape='Cube', link1_shape='Cube', params={'base_dimensions': [0.1, 0.1, 0.1], 'link1_dimensions': [0.05, 0.05, 0.09]}).get_objectId()
+    # buttonId = Button(base_shape='Cube', link1_shape='Cube', params={'base_dimensions': [0.1, 0.1, 0.1], 'link1_dimensions': [0.05, 0.05, 0.09]}).get_objectId()
+    buttonId = Button(base_shape='Cylinder', link1_shape='Prism', params={'base_dimensions': [0.1, 0.2], 'link1_dimensions': [0.03, 0.15, 0.03]}).get_objectId()
     # self.objectId = p.loadURDF("button.urdf", useFixedBase=False)
 
-    p.resetBasePositionAndOrientation(sphereId, [1.0, 0, 0.6], [0., 0., 0., 1.])
+    p.resetBasePositionAndOrientation(robotId, [1.0, 0, 0.6], [0., 0., 0., 1.])
     # p.resetBasePositionAndOrientation(self.objectId, [0, 0, 0.1], [0., 0., 0., 1.])
 
-    #p.resetBasePositionAndOrientation(sphereId, [0.5, -0.8, 0.0],[0,0,0,1])
-    #p.resetBasePositionAndOrientation(sphereId, [0, 0, 0], )
+    #p.resetBasePositionAndOrientation(robotId, [0.5, -0.8, 0.0],[0,0,0,1])
+    #p.resetBasePositionAndOrientation(robotId, [0, 0, 0], )
 
     p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,1)
 
@@ -219,7 +245,7 @@ def setUpWorld(initialSimSteps=100):
     for _ in range(initialSimSteps):
         p.stepSimulation()
 
-    return sphereId, buttonId
+    return robotId, buttonId
 
 def getJointRanges(bodyId, includeFixed=False):
     """
@@ -258,49 +284,49 @@ def getJointRanges(bodyId, includeFixed=False):
 
     return lowerLimits, upperLimits, jointRanges, restPoses
 
-def accurateIK(bodyId, endEffectorId, targetPosition, lowerLimits, upperLimits, jointRanges, restPoses, 
-               useNullSpace=False, maxIter=10, threshold=1e-4):
-    """
-    Parameters
-    ----------
-    bodyId : int
-    endEffectorId : int
-    targetPosition : [float, float, float]
-    lowerLimits : [float] 
-    upperLimits : [float] 
-    jointRanges : [float] 
-    restPoses : [float]
-    useNullSpace : bool
-    maxIter : int
-    threshold : float
+# def accurateIK(bodyId, endEffectorId, targetPosition, lowerLimits, upperLimits, jointRanges, restPoses, 
+#                useNullSpace=False, maxIter=10, threshold=1e-4):
+#     """
+#     Parameters
+#     ----------
+#     bodyId : int
+#     endEffectorId : int
+#     targetPosition : [float, float, float]
+#     lowerLimits : [float] 
+#     upperLimits : [float] 
+#     jointRanges : [float] 
+#     restPoses : [float]
+#     useNullSpace : bool
+#     maxIter : int
+#     threshold : float
 
-    Returns
-    -------
-    jointPoses : [float] * numDofs
-    """
-    closeEnough = False
-    iter = 0
-    dist2 = 1e30
+#     Returns
+#     -------
+#     jointPoses : [float] * numDofs
+#     """
+#     closeEnough = False
+#     iter = 0
+#     dist2 = 1e30
 
-    numJoints = p.getNumJoints(sphereId)
+#     numJoints = p.getNumJoints(robotId)
 
-    while (not closeEnough and iter<maxIter):
-        jointPoses = p.calculateInverseKinematics(bodyId, endEffectorId, targetPosition)
+#     while (not closeEnough and iter<maxIter):
+#         jointPoses = p.calculateInverseKinematics(bodyId, endEffectorId, targetPosition)
     
-        for i in range(numJoints):
-            jointInfo = p.getJointInfo(bodyId, i)
-            qIndex = jointInfo[3]
-            if qIndex > -1:
-                p.resetJointState(bodyId,i,jointPoses[qIndex-7])
-        ls = p.getLinkState(bodyId,endEffectorId)    
-        newPos = ls[4]
-        diff = [targetPosition[0]-newPos[0],targetPosition[1]-newPos[1],targetPosition[2]-newPos[2]]
-        dist2 = np.sqrt((diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]))
-        print("dist2=",dist2)
-        closeEnough = (dist2 < threshold)
-        iter=iter+1
-    print("iter=",iter)
-    return jointPoses
+#         for i in range(numJoints):
+#             jointInfo = p.getJointInfo(bodyId, i)
+#             qIndex = jointInfo[3]
+#             if qIndex > -1:
+#                 p.resetJointState(bodyId,i,jointPoses[qIndex-7])
+#         ls = p.getLinkState(bodyId,endEffectorId)    
+#         newPos = ls[4]
+#         diff = [targetPosition[0]-newPos[0],targetPosition[1]-newPos[1],targetPosition[2]-newPos[2]]
+#         dist2 = np.sqrt((diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]))
+#         print("dist2=",dist2)
+#         closeEnough = (dist2 < threshold)
+#         iter=iter+1
+#     print("iter=",iter)
+#     return jointPoses
 
 def setMotors(bodyId, jointPoses):
     """
@@ -330,10 +356,10 @@ if __name__ == "__main__":
     targetPosYId = p.addUserDebugParameter("targetPosY",-1,1,0)
     targetPosZId = p.addUserDebugParameter("targetPosZ",-1,1,-0)
     # nullSpaceId = p.addUserDebugParameter("nullSpace",0,1,1)
-    sphereId, buttonId = setUpWorld()
-    sphere_robot = PrismaticController(sphereId)
+    robotId, buttonId = setUpWorld()
+    robot = PrismaticRobot(robotId)
 
-    # lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(sphereId, includeFixed=False)
+    # lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(robotId, includeFixed=False)
 
     
     #targetPosition = [0.2, 0.8, -0.1]
@@ -347,7 +373,7 @@ if __name__ == "__main__":
     maxIters = 10000000
 
     sleep(1.)
-    lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(sphereId, includeFixed=False)
+    lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(robotId, includeFixed=False)
 
     p.getCameraImage(320,200, renderer=p.ER_BULLET_HARDWARE_OPENGL )
 
@@ -374,7 +400,7 @@ if __name__ == "__main__":
 
         # Reset robot
         target_joint_pos = [0.0, 0, 0]
-        sphere_robot.reset([x_start - 1.0, y_start, z_start - 0.6])
+        robot.reset([x_start - 1.0, y_start, z_start - 0.6])
 
         segment_1 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
 
@@ -397,10 +423,10 @@ if __name__ == "__main__":
             targetPosZ = targetPosition[2]
 
             targetPosition=[targetPosX,targetPosY,targetPosZ]
-            print(p.getJointState(buttonId, 0)[-6:-3])
-            # print(p.getJointState(sphereId, 0)[-6:-3])
+            # print(p.getJointState(buttonId, 0)[-6:-3])
+            # print(p.getJointState(robotId, 0)[-6:-3])
 
-            sphere_robot.move_to_pos(targetPosition)
+            robot.move_to_pos(targetPosition)
             sleep(0.01)
 
 
