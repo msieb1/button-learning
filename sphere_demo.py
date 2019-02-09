@@ -2,8 +2,100 @@ from time import sleep
 import pybullet as p
 import numpy as np
 import math
+from abc import ABCMeta, abstractmethod
 
 from utils.util import create_ranges_divak
+
+# class SimpleShape(object):
+#     """Geometric Shape Super Class
+
+#     Attributes:
+
+#     """
+
+#     __metaclass__ = ABCMeta
+
+#     @abstractmethod
+#     def __init__(self, dimensions):
+#         self.dimensions = dimensions
+
+#     @abstractmethod
+#     def set_dimensions(self, dimensions):
+#         """"Dynamically change shape dimensions"""
+#         pass
+    
+#     @abstractmethod
+#     def get_dimensions(self, dimensions):
+#         """Get dimensions of shape"""
+#         pass
+
+
+class Cube(object):
+
+    def __init__(self, dimensions):
+        assert len(dimensions) == 3
+        self.dimensions = dimensions
+        self.objectId = p.createCollisionShape(p.GEOM_BOX,halfExtents=dimensions)
+    
+    def get_objectId(self):
+        return self.objectId
+
+class Sphere(object):
+
+    def __init__(self, dimensions):
+        assert len(dimensions) == 1
+        self.dimensions = dimensions
+        self.objectId = p.createCollisionShape(p.GEOM_SPHERE,radius=dimensions)
+
+    def get_objectId(self):
+        return self.objectId
+
+    def set_dimensions(self, dimensions):
+        pass
+
+
+class Button():
+
+    def __init__(self, base_shape, link1_shape, params):
+        p.createCollisionShape(p.GEOM_PLANE)
+        p.createMultiBody(0,0)
+        baseId = globals()[base_shape](params['base_dimensions']).get_objectId()
+        link1Id = globals()[link1_shape](params['link1_dimensions']).get_objectId()
+
+        mass = 10000
+        visualShapeId = -1
+
+        link_Masses=[1]
+        linkCollisionShapeIndices=[link1Id]
+        linkVisualShapeIndices=[link1Id]
+        linkPositions=[[0,0,.17]]
+        linkOrientations=[[0,0,0,1]]
+        linkInertialFramePositions=[[0,0,0]]
+        linkInertialFrameOrientations=[[0,0,0,1]]
+        indices=[0]
+        jointTypes=[p.JOINT_PRISMATIC]
+        axis=[[0,0,1]]
+
+        basePosition = [0, 0, 0]
+        baseOrientation = [0,0,0,1]
+        self.objectId = p.createMultiBody(mass,baseId,visualShapeId,basePosition,baseOrientation,linkMasses=link_Masses,
+        linkCollisionShapeIndices=linkCollisionShapeIndices,linkVisualShapeIndices=linkVisualShapeIndices,
+        linkPositions=linkPositions,linkOrientations=linkOrientations,linkInertialFramePositions=linkInertialFramePositions, 
+        linkInertialFrameOrientations=linkInertialFrameOrientations,linkParentIndices=indices,linkJointTypes=jointTypes,linkJointAxis=axis)			
+
+        p.changeDynamics(self.objectId,-1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=1.0)
+        p.changeDynamics(self.objectId, 1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=10.0)
+
+        p.getNumJoints(self.objectId)
+        for i in range (p.getNumJoints(self.objectId)):
+            p.getJointInfo(self.objectId,i)
+        p.enableJointForceTorqueSensor(self.objectId, 0, enableSensor=True)
+        p.changeDynamics(self.objectId, 1, contactStiffness=10, contactDamping=10)
+        for joint in range (p.getNumJoints(self.objectId)):
+            p.setJointMotorControl2(self.objectId,joint,p.POSITION_CONTROL,targetVelocity=0,force=200)
+
+    def get_objectId(self):
+        return self.objectId
 
 class LineTrajectoryGenerator(object):
     def __init__(self, T, start_pos, end_pos):
@@ -41,7 +133,7 @@ class TrajectoryComposer(object):
             if cur_traj_start == last_traj_end:
                 self.composed = np.concatenate([self.composed, trajectories[i]])
             else:
-                connector = LineTrajectoryGenerator(connector_T, last_traj_end, cur_traj_start)
+                connector = LineTrajectoryGenerator(self.connector_T, last_traj_end, cur_traj_start)
                 self.composed = np.concatenate([self.composed, connector, trajectories[i]])            
 
         
@@ -105,10 +197,13 @@ def setUpWorld(initialSimSteps=100):
     p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,0)
     # Load Baxter
     sphereId = p.loadURDF("prismatic_sphere.urdf", useFixedBase=True)
-    buttonId = p.loadURDF("button.urdf", useFixedBase=False)
+    p.enableJointForceTorqueSensor(sphereId, 0, enableSensor=True)
+
+    buttonId = Button(base_shape='Cube', link1_shape='Cube', params={'base_dimensions': [0.1, 0.1, 0.1], 'link1_dimensions': [0.05, 0.05, 0.09]}).get_objectId()
+    # self.objectId = p.loadURDF("button.urdf", useFixedBase=False)
 
     p.resetBasePositionAndOrientation(sphereId, [1.0, 0, 0.6], [0., 0., 0., 1.])
-    p.resetBasePositionAndOrientation(buttonId, [0, 0, 0.1], [0., 0., 0., 1.])
+    # p.resetBasePositionAndOrientation(self.objectId, [0, 0, 0.1], [0., 0., 0., 1.])
 
     #p.resetBasePositionAndOrientation(sphereId, [0.5, -0.8, 0.0],[0,0,0,1])
     #p.resetBasePositionAndOrientation(sphereId, [0, 0, 0], )
@@ -118,7 +213,7 @@ def setUpWorld(initialSimSteps=100):
     # Grab relevant joint IDs
 
     # Set gravity
-    # p.setGravity(0., 0., -10)
+    p.setGravity(0., 0., -10)
 
     # Let the world run for a bit
     for _ in range(initialSimSteps):
@@ -235,9 +330,7 @@ if __name__ == "__main__":
     targetPosYId = p.addUserDebugParameter("targetPosY",-1,1,0)
     targetPosZId = p.addUserDebugParameter("targetPosZ",-1,1,-0)
     # nullSpaceId = p.addUserDebugParameter("nullSpace",0,1,1)
-
     sphereId, buttonId = setUpWorld()
-
     sphere_robot = PrismaticController(sphereId)
 
     # lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(sphereId, includeFixed=False)
@@ -263,7 +356,6 @@ if __name__ == "__main__":
     
     r = 1.0
 
-    
 
     for _ in range(10):
         theta = np.random.uniform(-math.pi, math.pi)
@@ -305,6 +397,8 @@ if __name__ == "__main__":
             targetPosZ = targetPosition[2]
 
             targetPosition=[targetPosX,targetPosY,targetPosZ]
+            print(p.getJointState(buttonId, 0)[-6:-3])
+            # print(p.getJointState(sphereId, 0)[-6:-3])
 
             sphere_robot.move_to_pos(targetPosition)
             sleep(0.01)
