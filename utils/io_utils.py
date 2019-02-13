@@ -4,21 +4,12 @@ import functools
 import imageio
 import numpy as np
 from PIL import Image
-import torch
-from torch.utils.data import Dataset, TensorDataset
-from torch import Tensor
-from torch.autograd import Variable
 import logging
 
 import sys
 import matplotlib.pyplot as plt
 import pickle
 from pdb import set_trace
-
-
-def distance(x1, x2):
-    diff = torch.abs(x1 - x2)
-    return torch.pow(diff, 2).sum(dim=1)
 
 def view_image(frame):
     # For debugging. Shows the image
