@@ -2,6 +2,7 @@ from time import sleep
 import pybullet as p
 import numpy as np
 import math
+import random
 from abc import ABCMeta, abstractmethod
 
 from utils.util import create_ranges_divak
@@ -23,7 +24,7 @@ from utils.util import create_ranges_divak
 #     def set_dimensions(self, dimensions):
 #         """"Dynamically change shape dimensions"""
 #         pass
-    
+
 #     @abstractmethod
 #     def get_dimensions(self, dimensions):
 #         """Get dimensions of shape"""
@@ -37,7 +38,7 @@ class Cube(object):
         self.param_dims = 3
         self.params = params
         self.objectId = p.createCollisionShape(p.GEOM_BOX,halfExtents=params)
-    
+
     def getId(self):
         return self.objectId
 
@@ -108,8 +109,8 @@ class Button():
         baseOrientation = [0,0,0,1]
         self.objectId = p.createMultiBody(mass,baseId,visualShapeId,basePosition,baseOrientation,linkMasses=link_Masses,
         linkCollisionShapeIndices=linkCollisionShapeIndices,linkVisualShapeIndices=linkVisualShapeIndices,
-        linkPositions=linkPositions,linkOrientations=linkOrientations,linkInertialFramePositions=linkInertialFramePositions, 
-        linkInertialFrameOrientations=linkInertialFrameOrientations,linkParentIndices=indices,linkJointTypes=jointTypes,linkJointAxis=axis)			
+        linkPositions=linkPositions,linkOrientations=linkOrientations,linkInertialFramePositions=linkInertialFramePositions,
+        linkInertialFrameOrientations=linkInertialFrameOrientations,linkParentIndices=indices,linkJointTypes=jointTypes,linkJointAxis=axis)
 
         p.changeDynamics(self.objectId,-1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=1.0)
         p.changeDynamics(self.objectId, 1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=10.0)
@@ -132,13 +133,13 @@ class LineTrajectoryGenerator(object):
         self.end_pos = end_pos
         self.trajectory = create_ranges_divak(np.array(start_pos), np.array(end_pos), T).T
 
-    
+
 class TrajectoryComposer(object):
-    def __init__(self, trajectories, connector_T=10):        
+    def __init__(self, trajectories, connector_T=10):
         self.trajectories = trajectories
         self.connector_T = connector_T
         try:
-            composed = trajectories[0] 
+            composed = trajectories[0]
         except:
             print("provided invalid trajectories")
 
@@ -152,9 +153,9 @@ class TrajectoryComposer(object):
                 connector = LineTrajectoryGenerator(connector_T, last_traj_end, cur_traj_start)
                 composed = np.concatenate([composed, connector, trajectories[idx]])
         self.composed = composed
-    
+
     def add_trajectory_segments(self, trajectories):
-        
+
         for i in range(len(trajectories)):
             last_traj_end = self.composed[-1]
             cur_traj_start = trajectories[i][0]
@@ -162,9 +163,9 @@ class TrajectoryComposer(object):
                 self.composed = np.concatenate([self.composed, trajectories[i]])
             else:
                 connector = LineTrajectoryGenerator(self.connector_T, last_traj_end, cur_traj_start)
-                self.composed = np.concatenate([self.composed, connector, trajectories[i]])            
+                self.composed = np.concatenate([self.composed, connector, trajectories[i]])
 
-        
+
 
 
 class PrismaticRobot(object):
@@ -173,7 +174,7 @@ class PrismaticRobot(object):
         self.bodyId = bodyId
         self.base_pos = p.getLinkState(bodyId, self.endEffectorId)[0]
         self.base_orn = p.getLinkState(bodyId, self.endEffectorId)[1]
-        
+
     def _set_joint_controls(self, jointPoses):
         """
         Parameters
@@ -189,18 +190,18 @@ class PrismaticRobot(object):
             if qIndex > -1:
                 p.setJointMotorControl2(bodyIndex=self.bodyId, jointIndex=i, controlMode=p.POSITION_CONTROL,
                                         targetPosition=jointPoses[qIndex-7])
-        
+
     def move_to_pos(self, pos):
         target_pos = np.array(pos) - np.array(self.base_pos)
         self._set_joint_controls(target_pos)
-    
+
     def reset(self, resetJointPoses):
         for i in range (p.getNumJoints(self.bodyId)):
             p.resetJointState(robotId,i,resetJointPoses[i])
-        
-        
-    
-    
+
+
+
+
 
 def setUpWorld(initialSimSteps=100):
     """
@@ -213,11 +214,11 @@ def setUpWorld(initialSimSteps=100):
     Returns
     -------
     robotId : int
-    endEffectorId : int 
+    endEffectorId : int
     """
     p.resetSimulation()
 
-    
+
     # Load plane
     p.loadURDF("plane.urdf", [0, 0, -0.0], useFixedBase=True)
 
@@ -287,7 +288,7 @@ def getJointRanges(bodyId, includeFixed=False):
 
     return lowerLimits, upperLimits, jointRanges, restPoses
 
-# def accurateIK(bodyId, endEffectorId, targetPosition, lowerLimits, upperLimits, jointRanges, restPoses, 
+# def accurateIK(bodyId, endEffectorId, targetPosition, lowerLimits, upperLimits, jointRanges, restPoses,
 #                useNullSpace=False, maxIter=10, threshold=1e-4):
 #     """
 #     Parameters
@@ -295,9 +296,9 @@ def getJointRanges(bodyId, includeFixed=False):
 #     bodyId : int
 #     endEffectorId : int
 #     targetPosition : [float, float, float]
-#     lowerLimits : [float] 
-#     upperLimits : [float] 
-#     jointRanges : [float] 
+#     lowerLimits : [float]
+#     upperLimits : [float]
+#     jointRanges : [float]
 #     restPoses : [float]
 #     useNullSpace : bool
 #     maxIter : int
@@ -315,13 +316,13 @@ def getJointRanges(bodyId, includeFixed=False):
 
 #     while (not closeEnough and iter<maxIter):
 #         jointPoses = p.calculateInverseKinematics(bodyId, endEffectorId, targetPosition)
-    
+
 #         for i in range(numJoints):
 #             jointInfo = p.getJointInfo(bodyId, i)
 #             qIndex = jointInfo[3]
 #             if qIndex > -1:
 #                 p.resetJointState(bodyId,i,jointPoses[qIndex-7])
-#         ls = p.getLinkState(bodyId,endEffectorId)    
+#         ls = p.getLinkState(bodyId,endEffectorId)
 #         newPos = ls[4]
 #         diff = [targetPosition[0]-newPos[0],targetPosition[1]-newPos[1],targetPosition[2]-newPos[2]]
 #         dist2 = np.sqrt((diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]))
@@ -364,15 +365,15 @@ if __name__ == "__main__":
 
     # lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(robotId, includeFixed=False)
 
-    
+
     #targetPosition = [0.2, 0.8, -0.1]
     #targetPosition = [0.8, 0.2, -0.1]
     targetPosition = [0.0, 0.0, -0.8]
-    
+
     p.addUserDebugText("TARGET", targetPosition, textColorRGB=[1,0,0], textSize=1.5)
 
     p.setRealTimeSimulation(0)
-    
+
     maxIters = 10000000
 
     sleep(1.)
@@ -382,13 +383,13 @@ if __name__ == "__main__":
 
     segments = []
     T = 70
-    
+
     r = 1.0
 
 
     for _ in range(10):
         theta = np.random.uniform(-math.pi, math.pi)
-        
+
         x_button = np.random.uniform(-1., 1.)
         y_button = np.random.uniform(-1., 1.)
         orn_button = np.random.uniform(-3, 3)
@@ -433,7 +434,7 @@ if __name__ == "__main__":
             sleep(0.01)
 
 
-    
+
         # Reset button
         target_joint_pos = [0.0, 0, 0.1]
         for i in range (p.getNumJoints(buttonId)):
@@ -442,20 +443,46 @@ if __name__ == "__main__":
 
 
 dims_dict = {'Cube': 3, 'Cylinder': 2, 'Prism': 3}
-object_names = dims.keys()
+object_names = dims_dict.keys()
 
-n_cells = 10
+"""Scene Parameters
+
+Parameters:
+n_scenes: Number of n_scenes
+grid_size: Outer dimensions of grid
+grid_elements: Elements per row / column of grid
+n_total_obejcts: Number of objects that are placed on grid
+n_buttons: Number of buttons spawned in the scene
+n_real_buttons: Number of buttons that can be pressed
+
+"""
 n_scenes = 10
+grid_size=2
+grid_elements=5
+n_total_objects=10
+n_buttons=4
+n_real_buttons=2
 
+assert grid_elements**2>n_total_objects,'Scene parameters are not correct!'
+assert n_buttons>=n_real_buttons,'Number of real buttons larger than number of buttons'
+
+# Return Position on Grid
+def createGridPositions(grid_size,grid_elements,n_total_objects):
+    gridPositions=[]
+    grid_el_size=float(grid_size)/grid_elements
+    for i in range (grid_elements):
+    	for j in range (grid_elements):
+    	       gridPositions.append([i*grid_el_size,j*grid_el_size])
+    grid_n =  random.sample(range(len(gridPositions)),n_total_obejcts)
+    return [gridPositions[i] for i in grid_n]
+
+# Start Scene creation
 for s in range(n_scenes):
-    button_locations = np.random.choice(n_cells, 2)
-    for i in range(len(grid)):
-        x, y = np.random.uniform(-grid_size grid_size, 2)
-        
-        if s in button_locations:
+    gridPositions=createGridPositions(grid_size,grid_elements,n_total_objects)
+    for i
+        if i in button_locations:
             base_object_name =  np.random.choice(object_names) # these are strings
             link1_object_name = np.random.choice(object_names) # these are strings
-
             base_params = np.random.uniform(-0.1, 0.1, dims_dict[base_object_name])
             link1_params = np.random.uniform(-0.1, 0.1, dims_dict[link1_object_name])
             buttonId = Button(base_object, link1_object, params={'base_params': base_params, 'link1_params': link1_params})
@@ -464,5 +491,4 @@ for s in range(n_scenes):
             object_name = np.random.choice(object_names)
             object_params = np.random.uniform(-0.2, 0.1524, dims_dict[object_name])
             baseId = globals()[object_name](object_params).getId()
-
             objectIds.append(baseId)
