@@ -7,7 +7,8 @@ import random
 from utils.util import create_ranges_divak
 
 
-dims_dict = {'Cube': 3, 'Cylinder': 2, 'Prism': 3}
+#dims_dict = {'Cube': 3, 'Cylinder': 2, 'Prism': 3}
+dims_dict = {'Cube': 3, 'Cylinder': 2}
 object_names = dims_dict.keys()
 # class SimpleShape(object):
 #     """Geometric Shape Super Class
@@ -74,7 +75,9 @@ class Prism(object):
     def __init__(self, dimensions):
         assert len(dimensions) == 3
         self.dimensions = dimensions
+        # Prism Dimension (0.1 m)
         self.objectId = p.createCollisionShape(p.GEOM_MESH,fileName="prism.obj", collisionFrameOrientation=p.getQuaternionFromEuler([math.pi / 2.0, 0, 0]) ,meshScale=dimensions)
+        #self.objectId = p.createCollisionShape(p.GEOM_MESH,fileName="prism.obj", collisionFrameOrientation=p.getQuaternionFromEuler([math.pi / 2.0, 0, 0]))
 
     def get_objectId(self):
         return self.objectId
@@ -110,6 +113,8 @@ class Button():
         linkCollisionShapeIndices=linkCollisionShapeIndices,linkVisualShapeIndices=linkVisualShapeIndices,
         linkPositions=linkPositions,linkOrientations=linkOrientations,linkInertialFramePositions=linkInertialFramePositions,
         linkInertialFrameOrientations=linkInertialFrameOrientations,linkParentIndices=indices,linkJointTypes=jointTypes,linkJointAxis=axis)
+        if params['joint_type']==p.JOINT_PRISMATIC:
+            p.changeVisualShape(self.objectId,-1,rgbaColor=[1.,1.,1.,1.])
 
         p.changeDynamics(self.objectId,-1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=1.0)
         p.changeDynamics(self.objectId, 1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=10.0)
@@ -120,7 +125,7 @@ class Button():
         p.enableJointForceTorqueSensor(self.objectId, 0, enableSensor=True)
         p.changeDynamics(self.objectId, 1, contactStiffness=10, contactDamping=10)
         for joint in range (p.getNumJoints(self.objectId)):
-            p.setJointMotorControl2(self.objectId,joint,p.POSITION_CONTROL,targetVelocity=0,force=200)
+            p.setJointMotorControl2(self.objectId,joint,p.POSITION_CONTROL,targetPosition=0,force=200)
 
     def getId(self):
         return self.objectId
@@ -215,17 +220,74 @@ def createGridPositions(grid_size,grid_elements,n_total_obejcts):
     grid_n =  random.sample(range(len(gridPositions)),n_total_obejcts)
     return [gridPositions[i] for i in grid_n]
 
+def calculateLinkZPos(base_object_name,link1_object_name,base_params,link1_params,joint_type):
+    #if joint_type==p.JOINT_PRISMATIC:
+    if base_object_name=='Cube' and link1_object_name=='Cube':
+        link_pos_z_dim=base_params[2]+link1_params[2]
+    elif base_object_name=='Cylinder' and link1_object_name=='Cube':
+        link_pos_z_dim=base_params[1]*0.5+link1_params[2]
+    elif base_object_name=='Prism' and link1_object_name=='Prism':
+        link_pos_z_dim=base_params[1]*0.1*0.5+link1_params[1]*0.1*0.5
+    elif base_object_name=='Cylinder' and link1_object_name=='Cylinder':
+        link_pos_z_dim=base_params[1]*0.5+link1_params[1]*0.5
+    elif base_object_name=='Prism' and link1_object_name=='Cylinder':
+        link_pos_z_dim=base_params[1]*0.1+link1_params[1]*0.5
+    elif base_object_name=='Prism' and link1_object_name=='Cube':
+        link_pos_z_dim=base_params[1]*0.1+link1_params[2]
+    elif base_object_name=='Cylinder' and link1_object_name=='Prism':
+        link_pos_z_dim=base_params[1]*0.5+link1_params[1]*0.1*0.5
+    elif base_object_name=='Cube' and link1_object_name=='Cylinder':
+        link_pos_z_dim=base_params[2]+link1_params[1]*0.5
+    elif base_object_name=='Cube' and link1_object_name=='Prism':
+        link_pos_z_dim=base_params[2]+link1_params[1]*0.1*0.5
+        # else:
+        # if base_object_name=='Cube':
+        #     link_pos_z_dim=base_params[2]*2
+        # elif base_object_name=='Cylinder':
+        #     link_pos_z_dim=base_params[1]
+        # elif base_object_name=='Prism':
+        #     link_pos_z_dim=base_params[1]*0.1
+    return link_pos_z_dim
+
+def createBaseParams(grid_size,grid_elements,base_object_name):
+    if base_object_name=='Cube':
+        base_params = np.random.uniform(float(grid_size)/(8*grid_elements), float(grid_size)/(6*grid_elements), dims_dict[base_object_name])
+    elif base_object_name=='Cylinder':
+        radius=np.random.uniform(float(grid_size)/(8*grid_elements), float(grid_size)/(6*grid_elements))
+        height=np.random.uniform(float(grid_size)/(8*grid_elements), float(grid_size)/(4*grid_elements))
+        base_params=[radius,height]
+    elif base_object_name=='Prism':
+        base_params=10*np.random.uniform(float(grid_size)/(8*grid_elements), float(grid_size)/(6*grid_elements),dims_dict[base_object_name])
+    return base_params
+
+def createLinkParams(grid_size,grid_elements,link1_object_name):
+    if link1_object_name=='Cube':
+        link1_params = np.random.uniform(float(grid_size)/(16*grid_elements), float(grid_size)/(12*grid_elements), dims_dict[link1_object_name])
+    elif link1_object_name=='Cylinder':
+        radius=np.random.uniform(float(grid_size)/(16*grid_elements), float(grid_size)/(12*grid_elements))
+        height=np.random.uniform(float(grid_size)/(12*grid_elements), float(grid_size)/(8*grid_elements))
+        link1_params=[radius,height]
+    elif link1_object_name=='Prism':
+        link1_params=10*np.random.uniform(float(grid_size)/(12*grid_elements), float(grid_size)/(8*grid_elements),dims_dict[link1_object_name])
+    return link1_params
+
 def createParams(grid_size,grid_elements,gridPosition,joint_type):
     params={}
     base_object_name =  np.random.choice(object_names) # these are strings
     link1_object_name = np.random.choice(object_names) # these are strings
-    base_params = np.random.uniform(float(grid_size)/(8*grid_elements), float(grid_size)/(4*grid_elements), dims_dict[base_object_name])
-    link1_params= np.random.uniform(float(grid_size)/(16*grid_elements),float(grid_size)/(8*grid_elements),dims_dict[link1_object_name])
+    base_params = createBaseParams(grid_size,grid_elements,base_object_name)
+    link1_params= createLinkParams(grid_size,grid_elements,link1_object_name)
+    print(base_params)
+    print(base_object_name)
     base_pos=gridPosition
-    link1_pos=[0,0,0.1] # CHECKCHECKCHECK
-    base_orn=[0., 0.,np.random.uniform(-3, 3), 1.]
-    link1_orn=[0., 0.,np.random.uniform(-3, 3), 1.]
-    params={'base_params': base_params, 'link1_params': link1_params,'base_pos':base_pos,'link1_pos':link1_pos,'base_orn':base_orn,'link1_orn':link1_orn,'joint_type':joint_type}
+    link_pos_z_dim=calculateLinkZPos(base_object_name,link1_object_name,base_params,link1_params,joint_type)
+    print(link_pos_z_dim)
+    link1_pos=[0,0,link_pos_z_dim]
+    #base_orn=[0., 0.,np.random.uniform(0,np.pi), 1.] #TBD
+    #link1_orn=[0., 0.,np.random.uniform(np.pi), 1.] #TBD
+    base_orn=[0.,0.,0.,1]
+    link1_orn=[0.,0.,0.,1]
+    params={'base_params': base_params, 'link1_params': link1_params,'base_pos':base_pos,'link1_pos':link1_pos,'base_orn':base_orn,'link1_orn':link1_orn,'joint_type':joint_type,'link_z':link_pos_z_dim}
     return base_object_name,link1_object_name,params
 
 def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons):
@@ -258,6 +320,7 @@ def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons)
 #####
     gridPositions=createGridPositions(grid_size,grid_elements,n_total_objects)
     real_button_idx,fake_button_idx,object_idx=createIndices(n_total_objects,n_buttons,n_real_buttons)
+
     for i in range(n_total_objects):
         if i in real_button_idx:
             base_object_name,link1_object_name,params=createParams(grid_size, grid_elements,gridPositions[i],p.JOINT_PRISMATIC)
@@ -268,13 +331,18 @@ def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons)
         else:
             base_object_name,link1_object_name,params=createParams(grid_size, grid_elements,gridPositions[i],False)
             baseId = globals()[base_object_name](params['base_params']).get_objectId()
-            buttonId = p.createMultiBody(1,baseId,-1,params['base_pos'],params['base_orn'])
+            # visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH,fileName="duck.obj", rgbaColor=[1,1,1,1], specularColor=[0.4,.4,0], visualFramePosition=shift, meshScale=meshScale)
+            # collisionShapeId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName="duck_vhacd.obj", collisionFramePosition=shift,meshScale=meshScale)
+            # buttonId = p.createMultiBody(baseMass=1,baseVisualShapeIndex=visualShapeId,baseCollisionShapeIndex=-1,basePosition=params['base_pos'],baseOrientation=params['base_orn'])
+            dict_orn={'Prism':p.getQuaternionFromEuler([math.pi / 2.0, 0, 0]),'Cube':[0.,0.,0.,1],'Cylinder':[0.,0.,0.,1]}
+            p.createMultiBody(1,baseId,-1,params['base_pos'],params['base_orn'])#baseInertialFramePosition=[0.,0.,0.])#baseInertialFrameOrientation=dict_orn[base_object_name])
+            #baseMass=1,baseInertialFramePosition=[0,0,0],baseCollisionShapeIndex=collisionShapeId, baseVisualShapeIndex = visualShapeId, basePosition = [((-rangex/2)+i)*meshScale[0]*2,(-rangey/2+j)*meshScale[1]*2,1], useMaximalCoordinates=True
 #####
 
     #buttonId = Button(base_shape='Cylinder', link1_shape='Prism', params={'base_dimensions': [0.1, 0.2], 'link1_dimensions': [0.03, 0.15, 0.03]}).getId()
     # self.objectId = p.loadURDF("button.urdf", useFixedBase=False)
 
-    p.resetBasePositionAndOrientation(robotId, [1.0, 0, 0.6], [0., 0., 0., 1.])
+    #p.resetBasePositionAndOrientation(robotId, [1.0, 0, 0.6], [0., 0., 0., 1.])
     # p.resetBasePositionAndOrientation(self.objectId, [0, 0, 0.1], [0., 0., 0., 1.])
 
     #p.resetBasePositionAndOrientation(robotId, [0.5, -0.8, 0.0],[0,0,0,1])
@@ -364,7 +432,7 @@ def getJointRanges(bodyId, includeFixed=False):
 #             qIndex = jointInfo[3]
 #             if qIndex > -1:
 #                 p.resetJointState(bodyId,i,jointPoses[qIndex-7])
-#         ls = p.getLinkState(bodyId,endEffectorId)
+#         ls = p.getLinkState(bodyId,endEffectorId)link_pos_z_dim
 #         newPos = ls[4]
 #         diff = [targetPosition[0]-newPos[0],targetPosition[1]-newPos[1],targetPosition[2]-newPos[2]]
 #         dist2 = np.sqrt((diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]))
@@ -389,13 +457,13 @@ def setMotors(bodyId, jointPoses):
         qIndex = jointInfo[3]
         if qIndex > -1:
             p.setJointMotorControl2(bodyIndex=bodyId, jointIndex=i, controlMode=p.POSITION_CONTROL,
-                                    targetPosition=jointPoses[qIndex-7])
+                                    targetPosition=jointPoses[qIndex])
 
 
 
 if __name__ == "__main__":
     guiClient = p.connect(p.GUI)
-    p.resetDebugVisualizerCamera(2., 180, 0., [0.52, 0.2, np.pi/4.])
+    p.resetDebugVisualizerCamera(2., 0, -88., [0., 0, 0])
 
 
     targetPosXId = p.addUserDebugParameter("targetPosX",-1,1,0)
@@ -407,8 +475,8 @@ if __name__ == "__main__":
     grid_size=2
     grid_elements=4
     n_total_objects=10
-    n_buttons=4
-    n_real_buttons=2
+    n_buttons=5
+    n_real_buttons=3
 
     robotId, buttonId = setUpWorld(grid_size,grid_elements,n_total_objects,n_buttons,n_real_buttons)
     robot = PrismaticRobot(robotId)
@@ -437,55 +505,58 @@ if __name__ == "__main__":
     r = 1.0
 
 
-    for _ in range(10):
-        theta = np.random.uniform(-math.pi, math.pi)
-
-        x_button = np.random.uniform(-1., 1.)
-        y_button = np.random.uniform(-1., 1.)
-        orn_button = np.random.uniform(-3, 3)
-        p.resetBasePositionAndOrientation(buttonId, [x_button, y_button, 0.1], [0., 0., orn_button, 1.])
-
-        x_start = np.cos(theta)
-        x_end = 0 + x_button
-        y_start = np.sin(theta)
-        y_end = 0 + y_button
-        z_start = 0.6
-        z_end = np.random.uniform(0.4, 0.8)
-
-        # Reset robot
-        target_joint_pos = [0.0, 0, 0]
-        robot.reset([x_start - 1.0, y_start, z_start - 0.6])
-
-        segment_1 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
-
-        x_start = x_end
-        x_end = x_start
-        y_start = y_end
-        y_end = y_start
-        z_start = z_end
-        z_end = 0
-        segment_2 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
-
-        composed = TrajectoryComposer([segment_1.trajectory, segment_2.trajectory])
-
-
-        for t in range(len(composed.composed)):
-            targetPosition = composed.composed[t, ...]
-            p.stepSimulation()
-            targetPosX = targetPosition[0]
-            targetPosY = targetPosition[1]
-            targetPosZ = targetPosition[2]
-
-            targetPosition=[targetPosX,targetPosY,targetPosZ]
-            # print(p.getJointState(buttonId, 0)[-6:-3])
-            # print(p.getJointState(robotId, 0)[-6:-3])
-
-            robot.move_to_pos(targetPosition)
-            sleep(0.01)
-
-
-
-        # Reset button
-        target_joint_pos = [0.0, 0, 0.1]
-        for i in range (p.getNumJoints(buttonId)):
-            p.resetJointState(buttonId,i,target_joint_pos[i])
+    # for _ in range(10):
+    # theta = np.random.uniform(-math.pi, math.pi)
+    #
+    # x_button = np.random.uniform(-1., 1.)
+    # y_button = np.random.uniform(-1., 1.)
+    # orn_button = np.random.uniform(-3, 3)
+    # p.resetBasePositionAndOrientation(buttonId, [x_button, y_button, 0.1], [0., 0., orn_button, 1.])
+    #
+    #     x_start = np.cos(theta)
+    #     x_end = 0 + x_button
+    #     y_start = np.sin(theta)
+    #     y_end = 0 + y_button
+    #     z_start = 0.6
+    #     z_end = np.random.uniform(0.4, 0.8)
+    #
+    #     # Reset robot
+    #     target_joint_pos = [0.0, 0, 0]
+    #     robot.reset([x_start - 1.0, y_start, z_start - 0.6])
+    #
+    #     segment_1 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
+    #
+    #     x_start = x_end
+    #     x_end = x_start
+    #     y_start = y_end
+    #     y_end = y_start
+    #     z_start = z_end
+    #     z_end = 0
+    #     segment_2 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
+    #
+    #     composed = TrajectoryComposer([segment_1.trajectory, segment_2.trajectory])
+    #
+    #
+    #     for t in range(len(composed.composed)):
+    #         targetPosition = composed.composed[t, ...]
+    #         p.stepSimulation()
+    #         targetPosX = targetPosition[0]
+    #         targetPosY = targetPosition[1]
+    #         targetPosZ = targetPosition[2]
+    #
+    #         targetPosition=[targetPosX,targetPosY,targetPosZ]
+    #         # print(p.getJointState(buttonId, 0)[-6:-3])
+    #         # print(p.getJointState(robotId, 0)[-6:-3])
+    #
+    #         robot.move_to_pos(targetPosition)
+    #         sleep(0.01)
+    #
+    #
+    #
+    #     # Reset button
+    #     target_joint_pos = [0.0, 0, 0.1]
+    #     for i in range (p.getNumJoints(buttonId)):
+    #         p.resetJointState(buttonId,i,target_joint_pos[i])
+    while (1):
+    	keys = p.getKeyboardEvents()
+    time.sleep(0.1)
