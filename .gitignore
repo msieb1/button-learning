@@ -117,3 +117,5 @@ dmypy.json
 data
 data/
 data/*
+experiments/
+.experiments

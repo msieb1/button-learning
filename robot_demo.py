@@ -332,7 +332,7 @@ def setUpWorld(initialSimSteps=100):
     p.enableJointForceTorqueSensor(robotId, 0, enableSensor=True)
 
     # buttonId = Button(base_shape='Cube', link1_shape='Cube', params={'base_dimensions': [0.1, 0.1, 0.1], 'link1_dimensions': [0.05, 0.05, 0.09]}).getId()
-    buttonId = Button(base_shape='Cylinder', link1_shape='Prism', params={'base_dimensions': [0.1, 0.2], 'link1_dimensions': [0.03, 0.15, 0.03]}).getId()
+    buttonId = Button(base_shape='Cylinder', link1_shape='Cylinder', params={'base_dimensions': [0.1, 0.2], 'link1_dimensions': [0.05, 0.1]}).getId()
 
     p.resetBasePositionAndOrientation(robotId, [1.0, 0, 0.6], [0., 0., 0., 1.])
 

@@ -4,34 +4,152 @@ import numpy as np
 import math
 from abc import ABCMeta, abstractmethod
 import random
-from utils.util import create_ranges_divak
+import yaml
+from os.path import join
+import os
+import imageio
 
+from utils.util import create_ranges_divak
+from utils.io_utils import create_data_folders
 
 #dims_dict = {'Cube': 3, 'Cylinder': 2, 'Prism': 3}
 dims_dict = {'Cube': 3, 'Cylinder': 2}
 object_names = dims_dict.keys()
-# class SimpleShape(object):
-#     """Geometric Shape Super Class
 
-#     Attributes:
+class Collector(object):
+    """
+    Collects demonstration.37
 
-#     """
+    ToDo: parametrize start and end configuration of objects and gripper
+    """
+    def __init__(self, save_dir, num=None, opt_flow=False, sample_rate_opt_flow=30):
+        self.save_dir = save_dir
+        self.num = num
+        self.opt_flow = opt_flow
+        self.sample_rate_opt_flow = sample_rate_opt_flow
 
-#     __metaclass__ = ABCMeta
+        self.setup_io()
 
-#     @abstractmethod
-#     def __init__(self, dimensions):
-#         self.dimensions = dimensions
+    def _get_seq_number(self):
+        """
+        Create unique identifier, either provided or using latest sequence number in folder +1
+        """
 
-#     @abstractmethod
-#     def set_dimensions(self, dimensions):
-#         """"Dynamically change shape dimensions"""
-#         pass
+        if self.num:
+            demo_num = self.num
+        else:
+            # If there's no video directory, this is the first sequence.
+            if not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir)
+            files = [f for f in os.listdir(self.save_dir) if not f.endswith('.npy')]
 
-#     @abstractmethod
-#     def get_dimensions(self, dimensions):
-#         """Get dimensions of shape"""
-#         pass
+            if not files:
+              demo_num = '0'
+            else:
+              # Otherwise, get the latest sequence name and increment it.
+              seq_names = [i.split('_')[0] for i in files if not i.endswith('.mp4')]
+              latest_seq = sorted(map(int, seq_names), reverse=True)[0]
+              demo_num = str(latest_seq+1)
+        return demo_num
+
+    def _compute_optical_flow(self, prev, cur):
+        # flow = cv2.calcOpticalFlowFarneback(skimage.img_as_float32(prev), skimage.img_as_float32(cur), None, 0.5, 3, 15, 3, 5, 1.2, 0)
+        flow = cv2.calcOpticalFlowFarneback(prev, cur, 0.5, 1, 3, 15, 3, 5, 1, 0)
+        return flow
+
+    def setup_io(self):
+        """
+        Setup io paths and filenames
+        """
+        print("saving to ", self.save_dir)
+        self.demo_num = self._get_seq_number()
+
+        # self.create_snapshot_experiment()
+
+        if self.opt_flow:
+            self.rgb_folder, self.depth_folder, self.seg_folder, self.flow_folder, self.info_folder, self.base_folder, self.vid_folder, self.sensor_folder \
+                            = create_data_folders(join(self.save_dir, self.demo_num), visual=True) # Put into config folder?
+            self.prev_img = None # For computing optical flow
+        else:
+            self.rgb_folder, self.depth_folder, self.seg_folder, self.info_folder, self.base_folder, self.vid_folder, self.sensor_folder \
+                            = create_data_folders(join(self.save_dir, self.demo_num), visual=False) # Put into config folder?            
+
+        """Creates and returns one view directory per webcam."""
+
+    def save_image_data(self, t, results, identifier=''):  
+        """
+        Save images to file (RGB, Depth, Optical Flow, Mask.png, Mask.npy)
+        """
+
+        # Save RGB images
+        imageio.imwrite('{0}/{1:05d}{2}.png'.format(
+            self.rgb_folder, t, identifier), np.array(results[2]))
+
+        # Save depth image
+        near = 0.001
+        far = 10
+        depth_tiny = far * near / (far - (far - near) * results[3])
+        imageio.imwrite('{0}/{1:05d}{2}.png'.format(
+            self.depth_folder, t, identifier), depth_tiny)
+
+        # Save mask as png
+        imageio.imwrite('{0}/{1:05d}{2}.png'.format(
+            self.seg_folder, t, identifier), (255*results[4]).astype(np.uint8))
+
+        # Save mask
+        np.save('{0}/{1:05d}{2}.npy'.format(
+             self.seg_folder, t, identifier), results[4])
+
+        # Save optical flow if enabled
+        if self.opt_flow:
+            # Note: we can compute flow online
+            cur = cv2.cvtColor(results[2], cv2.COLOR_BGR2GRAY) # TODO Check if BGR or RGB
+            # First frame
+            # if t // self.sample_rate_opt_flow == 1:
+            if t == 0:
+                self.prev_img = cur
+            flow = self._compute_optical_flow(self.prev_img, cur)
+            hsv = np.zeros((flow.shape[0], flow.shape[1], 3))
+            # Visualize optical flow
+            mag, ang = cv2.cartToPolar(flow[...,0], flow[...,1])
+            hsv[...,0] = ang*180/math.pi/2
+            hsv[...,2] = cv2.normalize(mag,None,0,255,cv2.NORM_MINMAX)
+            hsv = hsv.astype(np.uint8)
+            rgb = cv2.cvtColor(hsv,cv2.COLOR_HSV2RGB)
+            imageio.imwrite('{0}/{1:05d}{2}.png'.format(self.flow_folder, t, identifier), rgb)
+            self.prev_img = cur
+
+class CameraManager(object):
+
+    def __init__(self, yaml_path):
+        with open(yaml_path, 'r') as f:
+            self.params = [yaml.load(f)['camera_0']]
+        self._setup_cameras()  
+
+    def _setup_cameras(self):
+        self.viewMatrices = []
+        self.projectionMatrices = []
+        for i in range(len(self.params)):
+
+            self.viewMatrices.append(p.computeViewMatrixFromYawPitchRoll(
+                cameraTargetPosition=self.params[i]['view_params']['camera_target_position'],
+                distance=self.params[i]['view_params']['distance'], 
+                yaw=self.params[i]['view_params']['yaw'], 
+                pitch=self.params[i]['view_params']['pitch'], 
+                roll=self.params[i]['view_params']['roll'], 
+                upAxisIndex=self.params[i]['view_params']['upAxisIndex']
+            ))
+        for i in range(len(self.viewMatrices)):
+            self.projectionMatrices.append(
+            p.computeProjectionMatrixFOV(self.params[i]['proj_params']['fov'], 
+                self.params[i]['proj_params']['aspect'], self.params[i]['proj_params']['nearPlane'], self.params[i]['proj_params']['farPlane']))
+   
+    def get_camera_results(self, view=0):
+        img_as_array = p.getCameraImage(self.params[view]['img_width'], self.params[view]['img_height'], self.viewMatrices[view],self.projectionMatrices[view], shadow=0,lightDirection=[1,1,1],renderer=p.ER_TINY_RENDERER)
+        rgb = np.reshape(np.array(img_as_array[2]), (img_as_array[0], img_as_array[1], 4))
+        depth = np.reshape(np.array(img_as_array[3]), (img_as_array[0], img_as_array[1]))
+        segmentation = np.reshape(np.array(img_as_array[4]), (img_as_array[0], img_as_array[1]))
+        return (img_as_array[0], img_as_array[1], rgb, depth, segmentation) 
 
 
 class Cube(object):
@@ -114,7 +232,12 @@ class Button():
         linkPositions=linkPositions,linkOrientations=linkOrientations,linkInertialFramePositions=linkInertialFramePositions,
         linkInertialFrameOrientations=linkInertialFrameOrientations,linkParentIndices=indices,linkJointTypes=jointTypes,linkJointAxis=axis)
         if params['joint_type']==p.JOINT_PRISMATIC:
-            p.changeVisualShape(self.objectId,-1,rgbaColor=[1.,1.,1.,1.])
+            p.changeVisualShape(self.objectId,-1,rgbaColor=[0.,1.,1.,1.])
+        else:
+            p.changeVisualShape(self.objectId,-1,rgbaColor=np.random.rand(3).tolist() + [1])
+            p.changeVisualShape(self.objectId, 0,rgbaColor=np.random.rand(3).tolist() + [1])
+
+           
 
         p.changeDynamics(self.objectId,-1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=1.0)
         p.changeDynamics(self.objectId, 1,spinningFriction=0.001, rollingFriction=0.001,linearDamping=10.0)
@@ -313,8 +436,9 @@ def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons)
     sleep(0.1)
     p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,0)
     # Load Baxter
-    robotId = p.loadURDF("prismatic_sphere.urdf", useFixedBase=True)
-    p.enableJointForceTorqueSensor(robotId, 0, enableSensor=True)
+    robotId = None
+    # robotId = p.loadURDF("prismatic_sphere.urdf", useFixedBase=True)
+    # p.enableJointForceTorqueSensor(robotId, 0, enableSensor=True)
 
     # buttonId = Button(base_shape='Cube', link1_shape='Cube', params={'base_dimensions': [0.1, 0.1, 0.1], 'link1_dimensions': [0.05, 0.05, 0.09]}).get_objectId()
 #####
@@ -338,6 +462,7 @@ def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons)
             p.createMultiBody(1,baseId,-1,params['base_pos'],params['base_orn'])#baseInertialFramePosition=[0.,0.,0.])#baseInertialFrameOrientation=dict_orn[base_object_name])
             #baseMass=1,baseInertialFramePosition=[0,0,0],baseCollisionShapeIndex=collisionShapeId, baseVisualShapeIndex = visualShapeId, basePosition = [((-rangex/2)+i)*meshScale[0]*2,(-rangey/2+j)*meshScale[1]*2,1], useMaximalCoordinates=True
 #####
+            p.changeVisualShape(baseId,-1,rgbaColor=np.random.rand(3).tolist() + [1])
 
     #buttonId = Button(base_shape='Cylinder', link1_shape='Prism', params={'base_dimensions': [0.1, 0.2], 'link1_dimensions': [0.03, 0.15, 0.03]}).getId()
     # self.objectId = p.loadURDF("button.urdf", useFixedBase=False)
@@ -398,50 +523,6 @@ def getJointRanges(bodyId, includeFixed=False):
 
     return lowerLimits, upperLimits, jointRanges, restPoses
 
-# def accurateIK(bodyId, endEffectorId, targetPosition, lowerLimits, upperLimits, jointRanges, restPoses,
-#                useNullSpace=False, maxIter=10, threshold=1e-4):
-#     """
-#     Parameters
-#     ----------
-#     bodyId : int
-#     endEffectorId : int
-#     targetPosition : [float, float, float]
-#     lowerLimits : [float]
-#     upperLimits : [float]
-#     jointRanges : [float]
-#     restPoses : [float]
-#     useNullSpace : bool
-#     maxIter : int
-#     threshold : float
-
-#     Returns
-#     -------
-#     jointPoses : [float] * numDofs
-#     """
-#     closeEnough = False
-#     iter = 0
-#     dist2 = 1e30
-
-#     numJoints = p.getNumJoints(robotId)
-
-#     while (not closeEnough and iter<maxIter):
-#         jointPoses = p.calculateInverseKinematics(bodyId, endEffectorId, targetPosition)
-
-#         for i in range(numJoints):
-#             jointInfo = p.getJointInfo(bodyId, i)
-#             qIndex = jointInfo[3]
-#             if qIndex > -1:
-#                 p.resetJointState(bodyId,i,jointPoses[qIndex-7])
-#         ls = p.getLinkState(bodyId,endEffectorId)link_pos_z_dim
-#         newPos = ls[4]
-#         diff = [targetPosition[0]-newPos[0],targetPosition[1]-newPos[1],targetPosition[2]-newPos[2]]
-#         dist2 = np.sqrt((diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]))
-#         print("dist2=",dist2)
-#         closeEnough = (dist2 < threshold)
-#         iter=iter+1
-#     print("iter=",iter)
-#     return jointPoses
-
 def setMotors(bodyId, jointPoses):
     """
     Parameters
@@ -458,7 +539,6 @@ def setMotors(bodyId, jointPoses):
         if qIndex > -1:
             p.setJointMotorControl2(bodyIndex=bodyId, jointIndex=i, controlMode=p.POSITION_CONTROL,
                                     targetPosition=jointPoses[qIndex])
-
 
 
 if __name__ == "__main__":
@@ -479,7 +559,7 @@ if __name__ == "__main__":
     n_real_buttons=3
 
     robotId, buttonId = setUpWorld(grid_size,grid_elements,n_total_objects,n_buttons,n_real_buttons)
-    robot = PrismaticRobot(robotId)
+    # robot = PrismaticRobot(robotId)
 
     # lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(robotId, includeFixed=False)
 
@@ -487,45 +567,56 @@ if __name__ == "__main__":
     #targetPosition = [0.2, 0.8, -0.1]
     #targetPosition = [0.8, 0.2, -0.1]
     targetPosition = [0.0, 0.0, -0.8]
+    cam_manager = CameraManager('camera_config.yaml')
+    collector = Collector(save_dir=join('experiments', 'button'), opt_flow=False)
 
-    p.addUserDebugText("TARGET", targetPosition, textColorRGB=[1,0,0], textSize=1.5)
 
     p.setRealTimeSimulation(0)
-
-    maxIters = 10000000
-
-    sleep(1.)
-    lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(robotId, includeFixed=False)
-
-    p.getCameraImage(320,200, renderer=p.ER_BULLET_HARDWARE_OPENGL )
-
-    segments = []
-    T = 70
-
-    r = 1.0
+    results = cam_manager.get_camera_results()
+    collector.save_image_data(0, results)
 
 
+    # maxIters = 10000000
+
+    # sleep(1.)
+    # lowerLimits, upperLimits, jointRanges, restPoses = getJointRanges(robotId, includeFixed=False)
+
+    # p.getCameraImage(320,200, renderer=p.ER_BULLET_HARDWARE_OPENGL )
+
+    # segments = []
+    # T = 70
+
+    # r = 1.0
+    # criterion = _LOSS()
+    # agent = Agent()
+
+    # boxes = 
+
+    # logits = agent.predict(boxes, classifier_type='rgb')
+    # target_classes = torch.Tensor(buttonIds).float()
+    # if USE_CUDA:
+    #     target_classes = target_classes.cuda()
     # for _ in range(10):
-    # theta = np.random.uniform(-math.pi, math.pi)
-    #
-    # x_button = np.random.uniform(-1., 1.)
-    # y_button = np.random.uniform(-1., 1.)
-    # orn_button = np.random.uniform(-3, 3)
-    # p.resetBasePositionAndOrientation(buttonId, [x_button, y_button, 0.1], [0., 0., orn_button, 1.])
-    #
+    #     theta = np.random.uniform(-math.pi, math.pi)
+        
+    #     x_button = np.random.uniform(-1., 1.)
+    #     y_button = np.random.uniform(-1., 1.)
+    #     orn_button = np.random.uniform(-3, 3)
+    #     p.resetBasePositionAndOrientation(buttonId, [x_button, y_button, 0.1], [0., 0., orn_button, 1.])
+    
     #     x_start = np.cos(theta)
     #     x_end = 0 + x_button
     #     y_start = np.sin(theta)
     #     y_end = 0 + y_button
     #     z_start = 0.6
     #     z_end = np.random.uniform(0.4, 0.8)
-    #
+    
     #     # Reset robot
     #     target_joint_pos = [0.0, 0, 0]
     #     robot.reset([x_start - 1.0, y_start, z_start - 0.6])
-    #
+    
     #     segment_1 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
-    #
+    
     #     x_start = x_end
     #     x_end = x_start
     #     y_start = y_end
@@ -533,26 +624,26 @@ if __name__ == "__main__":
     #     z_start = z_end
     #     z_end = 0
     #     segment_2 = LineTrajectoryGenerator(T, [x_start, y_start, z_start], [x_end, y_end, z_end])
-    #
+    
     #     composed = TrajectoryComposer([segment_1.trajectory, segment_2.trajectory])
-    #
-    #
+    
+    
     #     for t in range(len(composed.composed)):
     #         targetPosition = composed.composed[t, ...]
     #         p.stepSimulation()
     #         targetPosX = targetPosition[0]
     #         targetPosY = targetPosition[1]
     #         targetPosZ = targetPosition[2]
-    #
+    
     #         targetPosition=[targetPosX,targetPosY,targetPosZ]
     #         # print(p.getJointState(buttonId, 0)[-6:-3])
     #         # print(p.getJointState(robotId, 0)[-6:-3])
-    #
+    
     #         robot.move_to_pos(targetPosition)
     #         sleep(0.01)
-    #
-    #
-    #
+    
+    
+    
     #     # Reset button
     #     target_joint_pos = [0.0, 0, 0.1]
     #     for i in range (p.getNumJoints(buttonId)):
