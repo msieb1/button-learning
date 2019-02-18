@@ -542,7 +542,8 @@ def setMotors(bodyId, jointPoses):
 
 
 if __name__ == "__main__":
-    guiClient = p.connect(p.GUI)
+    #guiClient = p.connect(p.GUI)
+    guiClient = p.connect(p.DIRECT)
     p.resetDebugVisualizerCamera(2., 0, -88., [0., 0, 0])
 
 

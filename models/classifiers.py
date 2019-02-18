@@ -6,6 +6,8 @@ from torch.autograd import Function
 import torchvision.models as models
 from copy import deepcopy as copy
 
+from pdb import set_trace as st
+
 class BatchNormConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, **kwargs):
         super(BatchNormConv2d, self).__init__()
@@ -35,9 +37,14 @@ class RGBClassifier(nn.Module):
     def __init__(self):
         super(RGBClassifier, self).__init__()
         self.Conv2d_1a = BatchNormConv2d(3, 32, kernel_size=3, stride=1)
-        self.Conv2d_2a = BatchNormConv2d(32, 64, kernel_size=3, stride=1)
-        self.Conv2d_3a = BatchNormConv2d(64, 64, kernel_size=3, stride=1)
-        self.FullyConnected_4a = Dense(7 * 7 * 64, 1, activation=nn.Sigmoid)
+        self.Conv2d_2a = BatchNormConv2d(32, 32, kernel_size=3, stride=1)
+        self.Conv2d_3a = BatchNormConv2d(32, 16, kernel_size=3, stride=1)
+        self.Conv2d_4a = BatchNormConv2d(16, 16, kernel_size=3, stride=1)
+        self.Conv2d_5a = BatchNormConv2d(16, 8, kernel_size=3, stride=1)
+        
+        self.FullyConnected_6a = Dense(8 * 90 * 90 , 1)
+        
+        self.Sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         if x.shape[1] == 4:
@@ -51,7 +58,11 @@ class RGBClassifier(nn.Module):
         x = self.Conv2d_1a(x)
         x = self.Conv2d_2a(x)
         x = self.Conv2d_3a(x)
-        x = self.FullyConnected_4a(x)
+        x = self.Conv2d_4a(x)
+        x = self.Conv2d_5a(x)
+        x = x.view(x.size()[0], -1)
+        x = self.FullyConnected_6a(x)
+        probs = self.Sigmoid(x)
         return x
 
 class DepthClassifier(nn.Module):
