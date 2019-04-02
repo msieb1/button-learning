@@ -88,8 +88,9 @@ class Button():
     def __init__(self, base_shape, link1_shape, params):
         p.createCollisionShape(p.GEOM_PLANE)
         p.createMultiBody(0,0)
-        baseId = globals()[base_shape](params['base_params']).getId()
-        link1Id = globals()[link1_shape](params['link1_params']).getId()
+        import ipdb; ipdb.set_trace()
+        baseId = globals()[base_shape](params['base_dimensions']).getId()
+        link1Id = globals()[link1_shape](params['link1_dimensions']).getId()
 
         mass = 10000
         visualShapeId = -1
@@ -479,16 +480,15 @@ def createGridPositions(grid_size,grid_elements,n_total_objects):
 # Start Scene creation
 for s in range(n_scenes):
     gridPositions=createGridPositions(grid_size,grid_elements,n_total_objects)
-    for i
-        if i in button_locations:
-            base_object_name =  np.random.choice(object_names) # these are strings
-            link1_object_name = np.random.choice(object_names) # these are strings
-            base_params = np.random.uniform(-0.1, 0.1, dims_dict[base_object_name])
-            link1_params = np.random.uniform(-0.1, 0.1, dims_dict[link1_object_name])
-            buttonId = Button(base_object, link1_object, params={'base_params': base_params, 'link1_params': link1_params})
-            objectIds.append(buttonId)
-        else:
-            object_name = np.random.choice(object_names)
-            object_params = np.random.uniform(-0.2, 0.1524, dims_dict[object_name])
-            baseId = globals()[object_name](object_params).getId()
-            objectIds.append(baseId)
+    if i in button_locations:
+        base_object_name =  np.random.choice(object_names) # these are strings
+        link1_object_name = np.random.choice(object_names) # these are strings
+        base_params = np.random.uniform(-0.1, 0.1, dims_dict[base_object_name])
+        link1_params = np.random.uniform(-0.1, 0.1, dims_dict[link1_object_name])
+        buttonId = Button(base_object, link1_object, params={'base_params': base_params, 'link1_params': link1_params})
+        objectIds.append(buttonId)
+    else:
+        object_name = np.random.choice(object_names)
+        object_params = np.random.uniform(-0.2, 0.1524, dims_dict[object_name])
+        baseId = globals()[object_name](object_params).getId()
+        objectIds.append(baseId)

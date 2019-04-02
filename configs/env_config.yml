@@ -1,0 +1,8 @@
+object_dict:
+    Cube: 3
+    Cylinder: 2
+grid_size: 2
+grid_elements: 4
+n_total_objects: 10
+n_buttons: 5
+n_real_buttons: 3

@@ -8,17 +8,18 @@ import yaml
 from os.path import join
 import os
 import imageio
+random.seed(0)
 
 from utils.util import create_ranges_divak
 from utils.io_utils import create_data_folders
 
 #dims_dict = {'Cube': 3, 'Cylinder': 2, 'Prism': 3}
 dims_dict = {'Cube': 3, 'Cylinder': 2}
-object_names = dims_dict.keys()
+object_names = list(dims_dict.keys())
 
-class Collector(object):
+class DataCollector(object):
     """
-    Collects demonstration.37
+    Collects demonstration
 
     ToDo: parametrize start and end configuration of objects and gripper
     """
@@ -403,6 +404,7 @@ def createParams(grid_size,grid_elements,gridPosition,joint_type):
     print(base_params)
     print(base_object_name)
     base_pos=gridPosition
+    print(base_pos)
     link_pos_z_dim=calculateLinkZPos(base_object_name,link1_object_name,base_params,link1_params,joint_type)
     print(link_pos_z_dim)
     link1_pos=[0,0,link_pos_z_dim]
@@ -428,7 +430,6 @@ def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons)
     """
     initialSimSteps=100
     p.resetSimulation()
-
 
     # Load plane
     p.loadURDF("plane.urdf", [0, 0, -0.0], useFixedBase=True)
@@ -461,8 +462,9 @@ def setUpWorld(grid_size,grid_elements,n_total_obejcts,n_buttons,n_real_buttons)
             dict_orn={'Prism':p.getQuaternionFromEuler([math.pi / 2.0, 0, 0]),'Cube':[0.,0.,0.,1],'Cylinder':[0.,0.,0.,1]}
             p.createMultiBody(1,baseId,-1,params['base_pos'],params['base_orn'])#baseInertialFramePosition=[0.,0.,0.])#baseInertialFrameOrientation=dict_orn[base_object_name])
             #baseMass=1,baseInertialFramePosition=[0,0,0],baseCollisionShapeIndex=collisionShapeId, baseVisualShapeIndex = visualShapeId, basePosition = [((-rangex/2)+i)*meshScale[0]*2,(-rangey/2+j)*meshScale[1]*2,1], useMaximalCoordinates=True
-#####
+#####       
             p.changeVisualShape(baseId,-1,rgbaColor=np.random.rand(3).tolist() + [1])
+    import ipdb; ipdb.set_trace()
 
     #buttonId = Button(base_shape='Cylinder', link1_shape='Prism', params={'base_dimensions': [0.1, 0.2], 'link1_dimensions': [0.03, 0.15, 0.03]}).getId()
     # self.objectId = p.loadURDF("button.urdf", useFixedBase=False)
@@ -542,8 +544,8 @@ def setMotors(bodyId, jointPoses):
 
 
 if __name__ == "__main__":
-    #guiClient = p.connect(p.GUI)
-    guiClient = p.connect(p.DIRECT)
+    guiClient = p.connect(p.GUI)
+    # guiClient = p.connect(p.DIRECT)
     p.resetDebugVisualizerCamera(2., 0, -88., [0., 0, 0])
 
 
@@ -568,8 +570,8 @@ if __name__ == "__main__":
     #targetPosition = [0.2, 0.8, -0.1]
     #targetPosition = [0.8, 0.2, -0.1]
     targetPosition = [0.0, 0.0, -0.8]
-    cam_manager = CameraManager('camera_config.yaml')
-    collector = Collector(save_dir=join('experiments', 'button'), opt_flow=False)
+    cam_manager = CameraManager('configs/camera_config.yml')
+    collector = DataCollector(save_dir=join('experiments', 'button'), opt_flow=False)
 
 
     p.setRealTimeSimulation(0)

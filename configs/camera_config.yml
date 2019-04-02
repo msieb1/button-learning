@@ -1,0 +1,32 @@
+0:
+  img_height: 640
+  img_width: 640
+  view_params: 
+    camera_target_position: [1, 1, 0]
+    distance: 5.5
+    yaw: -0
+    pitch: -86
+    roll: 0.0
+    upAxisIndex: 2    
+  proj_params:
+    nearPlane: 0.001
+    farPlane: 10
+    fov:  30
+    aspect: 1
+
+1:
+  img_height: 640
+  img_width: 640
+  view_params: 
+    camera_target_position: [1, 1, 0]
+    distance: 3.5
+    yaw: -0
+    pitch: -86
+    roll: 0.0
+    upAxisIndex: 2    
+  proj_params:
+    nearPlane: 0.001
+    farPlane: 10
+    fov:  10
+    aspect: 1
+

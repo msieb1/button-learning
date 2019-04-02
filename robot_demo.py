@@ -416,7 +416,7 @@ if __name__ == "__main__":
     targetPosZId = p.addUserDebugParameter("targetPosZ",-1,1,-0)
     # nullSpaceId = p.addUserDebugParameter("nullSpace",0,1,1)
     robotId, buttonId = setUpWorld()
-    cam_manager = CameraManager('camera_config.yaml')
+    cam_manager = CameraManager('configs/camera_config.yml')
     collector = Collector(save_dir=join('experiments', 'button'), opt_flow=False)
 
     robot = PrismaticRobot(robotId)
