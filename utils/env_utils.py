@@ -15,7 +15,7 @@ class DataCollector(object):
 
     ToDo: parametrize start and end configuration of objects and gripper
     """
-    def __init__(self, save_dir, camera_config_path, num=None, opt_flow=False, sample_rate_opt_flow=30):
+    def __init__(self, save_dir, num=None, opt_flow=False, sample_rate_opt_flow=30):
         self.save_dir = save_dir
         self.num = num
         self.opt_flow = opt_flow
@@ -150,6 +150,23 @@ class CameraManager(object):
             self.projectionMatrices.append(
             p.computeProjectionMatrixFOV(self._params[i]['proj_params']['fov'], 
                 self._params[i]['proj_params']['aspect'], self._params[i]['proj_params']['nearPlane'], self._params[i]['proj_params']['farPlane']))
+    
+    def add_camera(self, params):
+        self.viewMatrices.append(p.computeViewMatrixFromYawPitchRoll(
+            cameraTargetPosition=params['view_params']['camera_target_position'],
+            distance=params['view_params']['distance'], 
+            yaw=params['view_params']['yaw'], 
+            pitch=params['view_params']['pitch'], 
+            roll=params['view_params']['roll'], 
+            upAxisIndex=params['view_params']['upAxisIndex']
+        ))        
+        
+        self.projectionMatrices.append(
+        p.computeProjectionMatrixFOV(params['proj_params']['fov'], 
+            params['proj_params']['aspect'], params['proj_params']['nearPlane'], params['proj_params']['farPlane']))
+        self._params[len(self._params)] = params
+        index = len(self.viewMatrices) - 1
+        return index
    
     def get_camera_results(self, view=0):
         img_as_array = p.getCameraImage(self._params[view]['img_width'], self._params[view]['img_height'], self.viewMatrices[view],self.projectionMatrices[view], shadow=0,lightDirection=[1,1,1],renderer=p.ER_TINY_RENDERER)
