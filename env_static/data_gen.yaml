@@ -1,0 +1,11 @@
+im_size: 32
+
+is_button:
+  color:
+    RED: 1
+    GREEN: 0
+    BLUE: 0
+  shape:
+    SQUARE: 1
+    CIRCLE: 0
+    TRIANGLE: 0    
