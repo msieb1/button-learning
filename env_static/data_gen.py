@@ -48,7 +48,7 @@ if __name__ == "__main__":
                 and cfg['is_button']['shape'][SHAPES.get_name(b.shape)] else 0
         is_buttons.append(is_button)
 
-        imshow(b.render(im_size=cfg['im_size']), save=os.path.join(args.logdir, '{}.png'.format(i)))
+        imshow(b.render(im_size=cfg['im_size']), save=os.path.join(args.logdir, '{0:06d}.png'.format(i)))
 
     np.savez(os.path.join(args.logdir, 'data.npz'), colors=colors, shapes=shapes, is_buttons=is_buttons)
     import IPython; IPython.embed(); exit(0)
