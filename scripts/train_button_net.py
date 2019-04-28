@@ -21,11 +21,12 @@ from utils.torchsample.transforms.affine_transforms import Rotate, RotateWithLab
 from torchvision.transforms import ToTensor
 ### Set GPU visibility
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-# os.environ["CUDA_VISIBLE_DEVICES"]= "1, 2"  # Set this for adequate GPU usage
+os.environ["CUDA_VISIBLE_DEVICES"]= "1, 2"  # Set this for adequate GPU usage
 
 ### Set Global Parameters
 # _LOSS = nn.NLLLoss
 _LOSS = nn.BCELoss
+_RECON_LOSS = nn.MSELoss
 ROOT_DIR = '/home/msieb/git/button-learning/env_static/logs'
 
 ### Helper functions
@@ -49,6 +50,62 @@ def compute_recall(pred_labels, gt_labels):
     n_correct_pos = np.sum(pred_labels * gt_labels)
     # return 1.0 * n_correct_pos / np.sum(gt_labels)
     return -1
+
+def MI(Xs, Ys):
+    '''
+    Computes empirical mutual information of batches of pairwise r.v.'s
+    Xs, Ys are in shape B by N by D
+    B is number of pairwise r.v's
+    N is number of samples per r.v.
+    D is the dimension of r.v.
+
+    output is dimension B by 1
+    '''
+    
+    B, N, D = Xs.shape
+    
+    idx_fast, idx_slow = [], []
+    for i in range(D):
+        for j in range(D):
+            idx_slow.append(i)
+            idx_fast.append(j)
+    Xs_slow = Xs[:, :, idx_fast]
+    Ys_fast = Ys[:, :, idx_slow]
+
+    joint_ps = torch.mean(Xs_slow * Ys_fast, dim=1)
+    X_ps = torch.mean(Xs, dim=1)
+    Y_ps = torch.mean(Ys, dim=1)
+
+    mi = torch.sum( joint_ps * \
+        (
+        torch.log2(torch.clamp(joint_ps, 1e-7, 1)) \
+        - torch.log2(torch.clamp(X_ps[:, idx_slow], 1e-7, 1)) \
+        - torch.log2(torch.clamp(Y_ps[:, idx_fast], 1e-7, 1)) \
+        ),
+        dim=1
+    )
+
+    return mi
+
+
+def variation_dist(Xs, Ys):
+    '''
+    Computes "variation dist" between pairs of sampled r.v.'s
+    Xs, Ys are in shape B by N by D
+    B is number of pairwise r.v's
+    N is number of samples per r.v.
+    D is the dimension of r.v.
+
+    output is dimension B by 1
+    '''
+
+    Xs_delta_norms = torch.norm(Xs[:, 1:, :] - Xs[:, :-1, :], p=2, dim=1)
+    Ys_delta_norms = torch.norm(Ys[:, 1:, :] - Ys[:, :-1, :], p=2, dim=1)
+
+    dists = torch.norm(Xs_delta_norms - Ys_delta_norms, p=2, dim=1)
+
+    return dists
+
 
 def train(model, loader_tr, loader_t, lr=1e-3, epochs=1000, use_cuda=True):
     """Train model and shows sample results
@@ -91,6 +148,8 @@ def train(model, loader_tr, loader_t, lr=1e-3, epochs=1000, use_cuda=True):
         
     }
     criterion = _LOSS()
+    recon_criterion = _RECON_LOSS()
+    regularizer = nn.L1Loss()
     opt = optim.Adam(model.parameters(), lr=lr)
     t_epochs = trange(epochs, desc='{}/{}'.format(0, epochs))
     num_batches_tr = len(loader_tr)
@@ -111,9 +170,55 @@ def train(model, loader_tr, loader_t, lr=1e-3, epochs=1000, use_cuda=True):
                 yb = yb.cuda()
             opt.zero_grad()
 
-            pred, emb = model(xb)
+            pred, emb, emb_logits, recon = model(xb)
+            
+            entropies = torch.sum(-emb*torch.log2(torch.clamp(emb, 1e-3, 1)), dim=-1)
+            entropy_mean = torch.mean(entropies, dim=1)
+            entropy_min = torch.min(entropies, dim=1)[0]
+            entropy_var = torch.mean(torch.pow(entropies - entropy_mean.unsqueeze(1), 2), dim=1)
+            entropy_var_batch = torch.mean(entropy_var)
+            entropy_mean_batch = torch.mean(entropy_mean)
+            entropy_min_batch = torch.mean(entropy_min)
 
-            loss = criterion(pred, yb)
+            entropies_mean_samples = torch.mean(entropies, dim=0)
+            entropies_var_samples = torch.mean(torch.pow(entropies - entropies_mean_samples.unsqueeze(0), 2), dim=0)
+            entropies_var_samples_batch = torch.mean(entropies_var_samples)
+
+            recon_loss = recon_criterion(xb, recon)
+            idx_fast = []
+            idx_slow = []
+            for i in range(emb.shape[1]):
+                for j in range(emb.shape[1]):
+                    if i != j:
+                        idx_fast.append(j)
+                        idx_slow.append(i)
+            l1_regularization, l2_regularization = torch.tensor(0.0).cuda(), torch.tensor(0.0).cuda()
+            for name, param in model.named_parameters():
+                if 'Conv2d' in name or 'FC_6a' in name:
+                    l1_regularization += torch.norm(param, 1)
+                    l2_regularization += torch.norm(param, 2)
+
+            # pairwise_MI = MI(emb[:, idx_slow, :].permute(1, 0, 2), emb[:, idx_fast, :].permute(1, 0, 2))
+            # pairwise_MI_mean = torch.mean(pairwise_MI)
+            # pairwise_MI_max = torch.max(pairwise_MI)
+
+            # variation_dists = variation_dist(emb[:, idx_slow, :].permute(1, 0, 2), emb[:, idx_fast, :].permute(1, 0, 2))
+            # variation_dists_mean = torch.mean(variation_dists)
+
+            # loss = criterion(pred, yb) + alpha*regularizer(emb, torch.zeros(emb_logits.shape).cuda())
+            # loss = criterion(pred, yb) 
+            losses = [
+                criterion(pred, yb),
+                # -0.1 * entropy_mean_batch,
+                # -0.1 * entropy_var_batch,
+                # 0.2 * entropy_min_batch,
+                # 0.2 * entropies_var_samples_batch,
+                0.15 * regularizer(emb_logits, torch.zeros(emb_logits.shape).cuda()),
+                1. * recon_loss,
+                # torch.sum(entropies),
+                0.1 * l2_regularization
+            ]
+            loss = sum(losses)
 
             labels_pred = torch.round(pred)
             acc = compute_acc(labels_pred, yb)
@@ -121,13 +226,13 @@ def train(model, loader_tr, loader_t, lr=1e-3, epochs=1000, use_cuda=True):
 
             loss_tr += loss
             acc_tr += acc
-            rec_tr += acc
+            rec_tr += rec
            
 
             loss.backward()
             opt.step()
 
-            t_batches.set_description('Train: {:.2f}, {:.2f}, {:.2f}'.format(loss_tr, acc_tr, rec_tr))
+            t_batches.set_description('Train: {:.10f}, {:.2f}, {:.2f}'.format(loss_tr, acc_tr, rec_tr))
             t_batches.update()
         
 
@@ -147,8 +252,9 @@ def train(model, loader_tr, loader_t, lr=1e-3, epochs=1000, use_cuda=True):
             if use_cuda:
                 xb = xb.cuda()
                 yb = yb.cuda()
-            pred, emb = model(xb)
-            loss = criterion(pred, yb)
+            pred, emb, emb_logits, recon = model(xb)
+            # TODO: not real loss
+            loss = criterion(pred, yb)# + alpha*regularizer(emb, torch.zeros(emb_logits.shape).cuda())
 
             labels_pred = torch.round(pred)
             acc = compute_acc(labels_pred, yb)
@@ -157,8 +263,15 @@ def train(model, loader_tr, loader_t, lr=1e-3, epochs=1000, use_cuda=True):
             loss_t += loss
             acc_t += acc
             rec_t += rec
-            if (e+1) % 10 == 0:
+
+            if (e+1) % 90 == 0:
                 print('embedding: \n{}\ngt encoding: \n{}'.format(get_numpy(emb), get_numpy(sample['encoding'].view(-1, 2, 3))))
+                # print('pred: \n{}\ngt : \n{}'.format(get_numpy(labels_pred), get_numpy(sample['label']  )))
+                plt.figure(0)
+                plt.imshow(np.transpose((get_numpy(xb[0])*255).astype(np.uint8), (1,2,0)))
+                plt.figure(1)
+                plt.imshow(np.transpose((get_numpy(recon[0])*255).astype(np.uint8), (1,2,0)))
+                plt.show()
                 import ipdb; ipdb.set_trace()
         loss_t /= num_batches_t
         acc_t /= num_batches_t
@@ -197,7 +310,7 @@ def create_model(args, use_cuda=True):
 
     # model = BinaryEncoder(emb_dim=6)
     model = AttributeClassifier(emb_dim=3, num_attr=2)
-    # tcn = PosNet()
+
     if args.load_model:
         model_path = os.path.join(
             args.model_path,
@@ -218,7 +331,7 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument('--test_size', '-t', type=float, default=0.2)
-    parser.add_argument('--epochs', '-e', type=int, default=100)
+    parser.add_argument('--epochs', '-e', type=int, default=1000)
     parser.add_argument('--learning_rate', '-r', type=float, default=1e-3)
     parser.add_argument('--batch_size', '-b', type=int, default=1)
     parser.add_argument('--load_model', type=bool, default=False)
@@ -239,7 +352,7 @@ if __name__ == '__main__':
     n_test = int( n * .2 )  # number of test/val elements
     n_train = n - 2 * n_test
     dataset_tr, dataset_t, dataset_val = train_set, val_set, test_set = random_split(dataset, (n_train, n_test, n_test))
-    loader_tr = DataLoader(dataset_tr, batch_size=2,
+    loader_tr = DataLoader(dataset_tr, batch_size=10,
                         shuffle=True, num_workers=4)
     loader_t = DataLoader(dataset_t, batch_size=1, shuffle=True)                       
     

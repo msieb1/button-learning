@@ -145,7 +145,7 @@ class ButtonDataset(Dataset):
         label = self.labels[idx]
         encoding = self.ohe[idx]
 
-        # image = skimage.img_as_float32(image)
+        image = skimage.img_as_float32(image)
         sample = {'image': torch.from_numpy(image).float(), 'label': torch.Tensor([label]).float(), 'encoding': torch.from_numpy(encoding).float()}
 
         # Transform image if provided
