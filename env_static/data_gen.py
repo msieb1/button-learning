@@ -30,6 +30,7 @@ if __name__ == "__main__":
     parser.add_argument('--logdir', '-o', type=str)
     parser.add_argument('--num', '-n', type=int, default=100)
     parser.add_argument('--cfg', '-c', type=str, default='data_gen.yaml')
+    parser.add_argument('--unique_ims', '-u', action='store_true')
     args = parser.parse_args()
 
     if os.path.isdir(args.logdir):
@@ -38,7 +39,14 @@ if __name__ == "__main__":
 
     cfg = YamlConfig(args.cfg)
 
-    bs = Button.sample(args.num)
+    if args.unique_ims:
+        bs = []
+        for color_id in range(COLORS.N_COLORS):
+            for shape_id in range(SHAPES.N_SHAPES):
+                bs.append(Button(color_id, shape_id))
+    else:
+        bs = Button.sample(args.num)
+        
     colors, shapes, is_buttons = [], [], []
     for i, b in enumerate(bs):
         colors.append(b.color)
