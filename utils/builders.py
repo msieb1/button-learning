@@ -9,8 +9,8 @@ import skimage
 from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
+from torch.utils.data import Dataset
+from utils import randn
 from PIL import Image
 
 # Ignore warnings
@@ -152,3 +152,19 @@ class ButtonDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
         return sample
+
+class GaussianAdditiveNoiseTransform(object):
+
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, sample):
+        im = sample['image']
+        noise = self.std * randn(im.shape) + self.mean
+        noise_im = torch.clamp(im + noise, 0, 1)
+
+        return {
+            k : noise_im if k == 'image' else v 
+            for k, v in sample.items()
+        }

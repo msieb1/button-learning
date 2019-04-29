@@ -15,10 +15,9 @@ from torchvision import transforms, utils
 from tqdm import trange, tqdm
 from ipdb import set_trace as st
 from models.classifiers import AttributeClassifier
-from utils.builders import ButtonDataset
+from utils.builders import ButtonDataset, GaussianAdditiveNoiseTransform
 from utils.utils import weight_init, set_gpu_mode, zeros, get_numpy
-from utils.torchsample.transforms.affine_transforms import Rotate, RotateWithLabel, RandomChoiceRotateWithLabel
-from torchvision.transforms import ToTensor
+from torchvision.transforms import ToTensor, Compose
 ### Set GPU visibility
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
 os.environ["CUDA_VISIBLE_DEVICES"]= "1, 2"  # Set this for adequate GPU usage
@@ -346,7 +345,10 @@ if __name__ == '__main__':
     logging.info('Processing Data')
     
     ### Create dataset
-    dataset = ButtonDataset(root_dir=args.root_dir)                                              
+    dataset = ButtonDataset(root_dir=args.root_dir, transform=Compose([
+        GaussianAdditiveNoiseTransform(0, 0.02)
+    ]))
+
     # Split dataset in training and test set
     n = len(dataset)
     n_test = int( n * .2 )  # number of test/val elements
